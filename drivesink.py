@@ -9,6 +9,7 @@ import requests
 import requests_toolbelt
 import sys
 import uuid
+from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
 
 
 class CloudNode(object):
@@ -31,14 +32,27 @@ class CloudNode(object):
         return node
 
     def upload_child_file(self, name, local_path, existing_node=None):
-        logging.info("Uploading %s to %s", local_path, self.node["name"])
-        m = requests_toolbelt.MultipartEncoder([
+        #logging.info("Uploading %s to %s", local_path, self.node["name"])
+
+        e = requests_toolbelt.MultipartEncoder([
             ("metadata", json.dumps({
                 "name": name,
                 "kind": "FILE",
                 "parents": [self.node["id"]],
             })),
             ("content", (name, open(local_path, "rb")))])
+        
+        pbar = ProgressBar(widgets=[local_path, ' ', FileTransferSpeed(), ' ', Percentage(),
+                                    Bar(), ETA(), ' '],
+                           maxval=len(e)).start()
+
+        def progress_cb(monitor):
+          if pbar.maxval == monitor.bytes_read:
+              pbar.finish()
+          else:
+              pbar.update(monitor.bytes_read)
+
+        m = requests_toolbelt.MultipartEncoderMonitor(e, progress_cb)
         if existing_node:
             """
             # TODO: this is under-documented and currently 500s on Amazon's side
